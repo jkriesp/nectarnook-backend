@@ -78,7 +78,7 @@ async def update_product(product_id: int, product_data: ProductUpdateSchema, db:
             raise HTTPException(status_code=404, detail="Product not found")
 
         # Update product attributes
-        update_data = product_data.dict(exclude_unset=True)
+        update_data = product_data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(product, key, value)
 

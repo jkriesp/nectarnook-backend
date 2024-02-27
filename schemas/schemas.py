@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, constr
 from typing import Optional
 
 class ProductSchema(BaseModel):
@@ -14,7 +14,7 @@ class ProductSchema(BaseModel):
 
 
 class ProductUpdateSchema(BaseModel):
-    name: Optional[str] = None
+    name: Optional[constr(min_length=1)] = None # type: ignore
     description: Optional[str] = None
     price: Optional[float] = None
     in_stock: Optional[bool] = None
