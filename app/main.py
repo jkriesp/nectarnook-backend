@@ -1,9 +1,11 @@
 from sqlalchemy import select
 from fastapi import FastAPI, Depends, HTTPException
-from models import AsyncSessionLocal, Product
+from app.models import AsyncSessionLocal, Product
 from sqlalchemy.ext.asyncio import AsyncSession
-from schemas.schemas import ProductSchema, ProductUpdateSchema
+from schemas.schemas import ProductCreateSchema, ProductSchema, ProductUpdateSchema
 from typing import List
+from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException
 
 app = FastAPI()
 
@@ -37,22 +39,43 @@ async def read_product(product_id: int, db: AsyncSession = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Product not found")
         return product
 
-
 @app.get("/products/", response_model=List[ProductSchema])
 async def read_products(db: AsyncSession = Depends(get_db)):
+    try:
+        async with db as session:
+            result = await session.execute(select(Product))
+            products = result.scalars().all()
+            return [ProductSchema.from_orm(product) for product in products]
+    except SQLAlchemyError as e:
+        # Log the exception details to help with debugging
+        print(f"Database access error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error: Database operation failed.")
+    except Exception as e:
+        # Catch-all for any other exceptions
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error: Unable to process request.")
+
+@app.post("/products/", response_model=ProductSchema, status_code=201)
+async def create_product(product_data: ProductCreateSchema, db: AsyncSession = Depends(get_db)):
     """
-    Retrieve a list of all products.
+    Create a new product.
+
+    Parameters:
+    - product_data (ProductSchema): The product data.
 
     Returns:
-    - List[ProductSchema]: A list of all products.
+    - ProductSchema: The created product data.
+
+    Raises:
+    - HTTPException: 400 error if the product already exists.
     """
     async with db as session:
-        # Execute a query to fetch all Product instances
-        result = await session.execute(select(Product))
-        products = result.scalars().all()
-        # Convert SQLAlchemy models to Pydantic models
-        return [ProductSchema.from_orm(product) for product in products]
-    
+        product = Product(**product_data.model_dump())
+        session.add(product)
+        await session.commit()
+        await session.refresh(product)
+        return product
+
 @app.put("/products/{product_id}", response_model=ProductSchema)
 async def update_product(product_id: int, product_data: ProductUpdateSchema, db: AsyncSession = Depends(get_db)):
     """

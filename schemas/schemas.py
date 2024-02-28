@@ -22,3 +22,16 @@ class ProductUpdateSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ProductCreateSchema(BaseModel):
+    name: str
+    description: str
+    price: float
+    in_stock: bool
+
+# Schema for response, includes ID
+class ProductSchema(ProductCreateSchema):
+    id: int
+
+    class Config:
+        from_attributes = True

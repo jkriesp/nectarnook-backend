@@ -1,4 +1,4 @@
-from models import AsyncSessionLocal, Product
+from app.models import AsyncSessionLocal, Product
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 
