@@ -1,4 +1,4 @@
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, EmailStr, constr
 from typing import Optional
 
 class ProductSchema(BaseModel):
@@ -32,6 +32,18 @@ class ProductCreateSchema(BaseModel):
 # Schema for response, includes ID
 class ProductSchema(ProductCreateSchema):
     id: int
+
+    class Config:
+        from_attributes = True
+
+class UserCreateSchema(BaseModel):
+    username: EmailStr
+    password: str
+
+class UserSchema(BaseModel):
+    id: int
+    username: EmailStr
+    is_admin: bool
 
     class Config:
         from_attributes = True

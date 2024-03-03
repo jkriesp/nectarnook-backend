@@ -1,8 +1,11 @@
+from datetime import timedelta
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from fastapi import FastAPI, Depends, HTTPException
-from app.models import AsyncSessionLocal, Product
+from app import security
+from app.models import AsyncSessionLocal, Product, User
 from sqlalchemy.ext.asyncio import AsyncSession
-from schemas.schemas import ProductCreateSchema, ProductSchema, ProductUpdateSchema
+from schemas.schemas import ProductCreateSchema, ProductSchema, ProductUpdateSchema, UserCreateSchema, UserSchema
 from typing import List
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException
@@ -161,3 +164,66 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db)):
         
         return {"message": "Product deleted successfully"}
     
+
+# Authentication and Token Endpoints
+
+@app.post("/auth/users/", response_model=UserSchema)
+async def create_user(user: UserCreateSchema, db: AsyncSession = Depends(get_db)):
+    """
+    Create a new user.
+
+    Parameters:
+    - user (UserCreateSchema): The user data.
+
+    Returns:
+    - UserSchema: The created user data.
+
+    Raises:
+    - HTTPException: 400 error if the user already exists.
+    """
+    async with db as session:
+        async with session.begin():
+            db_user = await session.execute(select(User).filter(User.username == user.username))
+            db_user = db_user.scalars().first()
+            if db_user:
+                raise HTTPException(status_code=400, detail="User already exists")
+            hashed_password = security.get_password_hash(user.password)
+            new_user = User(username=user.username, hashed_password=hashed_password, is_admin=False)
+            session.add(new_user)
+            # Removed explicit session.commit() and session.refresh(new_user)
+        # Ensure your UserSchema can serialize new_user directly or convert new_user to a dict
+        return new_user
+
+        
+@app.post("/auth/token")
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    """
+    Login for access token.
+
+    Parameters:
+    - form_data (OAuth2PasswordRequestForm): The login form data.
+
+    Returns:
+    - TokenSchema: The access token and token type.
+
+    Raises:
+    - HTTPException: 401 error if the username or password is incorrect.
+    """
+    async with db as session:
+        user = await authenticate_user(form_data.username, form_data.password, session)
+        if not user:
+            raise HTTPException(status_code=401, detail="Incorrect username or password")
+        access_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = security.create_access_token(
+            data={"sub": user.username},
+            expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+    
+async def authenticate_user(username: str, password: str, db: AsyncSession):
+    # Directly use 'db' without 'async with'
+    result = await db.execute(select(User).filter(User.username == username))
+    db_user = result.scalars().first()
+    if db_user and security.verify_password(password, db_user.hashed_password):
+        return db_user
+    return False
